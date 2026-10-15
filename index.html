@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#22161d">
+<title>Mesa Viruez</title>
+<meta name="description" content="Herramienta privada de Viruez Envíos: cotizar, tramos con margen, publicar tasas, registro de ganancias y alertas.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Cinzel:wght@600;700&family=Cormorant+Garamond:ital,wght@1,600&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: herramienta de una columna con pestañas fijas arriba — Cotizar, Tasas, Publicar, Registro, Ajustes */
+:root{
+  --bg:#f4f0ee; --surface:#ffffff; --ink:#22161c; --muted:#6f6268; --line:#e6dcd9;
+  --gold:#a8790f; --gold-soft:#f6ecd6;
+  --ok:#1f8a4c; --warn:#b7791f; --bad:#c0392b;
+  --display:'Bricolage Grotesque',system-ui,sans-serif;
+  --body:'Figtree',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#170e13; --surface:#22161d; --ink:#f1e9e4; --muted:#a2949a; --line:#3a2830;
+  --gold:#e2b450; --gold-soft:#33261a; --ok:#4cc684; --warn:#e5a93a; --bad:#ef6b5e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#170e13; --surface:#22161d; --ink:#f1e9e4; --muted:#a2949a; --line:#3a2830;
+  --gold:#e2b450; --gold-soft:#33261a; --ok:#4cc684; --warn:#e5a93a; --bad:#ef6b5e; color-scheme:dark}
+
+*{box-sizing:border-box}
+html{padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.5 var(--body)}
+.gutter{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:560px;margin:0 auto;padding-block:16px 48px;display:grid;gap:16px}
+.tabular{font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+
+/* barra superior fija */
+.top{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+.top__in{max-width:560px;margin:0 auto;padding-block:10px 0;display:grid;gap:8px}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand__mark{width:34px;height:34px;border-radius:50%;background:var(--gold);color:#22161c;display:grid;place-items:center;font:800 16px var(--display)}
+.brand h1{margin:0;font:800 1.15rem/1.1 var(--display);letter-spacing:-.01em}
+.status{font:500 .75rem var(--mono);color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.dot.live{background:var(--ok);animation:pulse 2s infinite}
+.dot.err{background:var(--bad)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ok) 60%,transparent)}100%{box-shadow:0 0 0 8px transparent}}
+@media (prefers-reduced-motion:reduce){.dot.live{animation:none}}
+.tabs{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{flex:1;min-width:max-content;border:0;background:transparent;color:var(--muted);font:600 .88rem var(--body);padding:9px 10px 11px;cursor:pointer;border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--gold)}
+.tabs .badge{display:inline-block;min-width:16px;padding:0 4px;border-radius:99px;background:var(--bad);color:#fff;font-size:.7rem;margin-left:4px}
+
+.alerts{display:grid;gap:8px}
+.alert{display:flex;justify-content:space-between;gap:10px;align-items:center;background:color-mix(in srgb,var(--warn) 16%,var(--surface));border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);border-radius:12px;padding:10px 12px;font-size:.9rem}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}
+h2{font:800 1.05rem var(--display);margin:0 0 4px}
+.label{font:600 .72rem var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+.note{font-size:.8rem;color:var(--muted);margin:0}
+
+.route{display:flex;gap:8px;align-items:center}
+.route select{flex:1;min-width:0}
+select,input,textarea{font:600 1rem var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;width:100%;min-width:0}
+select:focus-visible,input:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.swap{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:1.1rem;cursor:pointer}
+.amounts{display:grid;gap:10px;margin-top:14px}
+.amt{display:grid;gap:4px}
+.amt input{font:600 1.5rem var(--mono);padding:12px 14px}
+.amt span{font-size:.8rem;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:99px;padding:6px 11px;font:500 .82rem var(--mono);cursor:pointer}
+
+.quote{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px;display:grid;gap:8px}
+.row{display:flex;justify-content:space-between;gap:12px;font-size:.92rem;align-items:baseline}
+.row b{font:500 .92rem var(--mono);text-align:right}
+.row.big b{font:800 1.2rem var(--display);color:var(--gold)}
+.pill{display:inline-flex;align-items:center;gap:6px;font:600 .8rem var(--body);padding:3px 10px;border-radius:99px;white-space:nowrap}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.pill.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.pill.warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent)}
+.pill.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.pill.none{color:var(--muted);background:color-mix(in srgb,var(--muted) 14%,transparent)}
+
+.actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.btn{flex:1;min-width:140px;border:0;border-radius:10px;padding:13px 14px;font:600 .95rem var(--body);cursor:pointer;text-align:center;text-decoration:none}
+.btn--gold{background:var(--gold);color:#22161c}
+.btn--ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.btn--danger{background:transparent;border:1px solid color-mix(in srgb,var(--bad) 50%,transparent);color:var(--bad)}
+.btn--small{flex:none;min-width:0;padding:7px 12px;font-size:.82rem}
+.toast{font-size:.85rem;color:var(--ok);min-height:1.2em;margin:8px 0 0}
+
+/* tasas */
+.today{display:grid;gap:16px;margin-top:12px}
+.rt__route{display:grid;gap:6px;border-top:1px solid var(--line);padding-top:12px}
+.rt__route:first-child{border-top:0;padding-top:0}
+.rt__head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.rt__head b{font-weight:600}
+.rt__head small{color:var(--muted);font-size:.78rem;display:block;font-weight:400}
+.rt__tier{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:9px 11px;border-radius:10px;background:var(--bg);align-items:center}
+.rt__tier .tr{font-size:.85rem;font-weight:600;min-width:0}
+.rt__tier .pub{font:500 1rem var(--mono);text-align:right}
+.rt__tier .sub{grid-column:1/-1;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.78rem;color:var(--muted);align-items:center}
+.rt__tier .sub b{font:500 .82rem var(--mono);color:var(--ink)}
+.new{color:var(--gold)!important}
+
+/* editor */
+details summary{cursor:pointer;font-weight:600;padding:2px 0}
+.editor{display:grid;gap:16px;margin-top:12px}
+.ed__route{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
+.ed__route:first-child{border-top:0;padding-top:0}
+.ed__head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ed__head b{font-weight:600}
+.ed__cols,.ed__row{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.9fr) minmax(0,.9fr) 40px;gap:8px;align-items:center}
+.ed__cols{font-size:.72rem;color:var(--muted)}
+.ed__row input{font:500 .95rem var(--mono);padding:9px 10px}
+.ed__row output{font:500 .9rem var(--mono);color:var(--gold);text-align:right}
+.del{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;font-size:1rem;flex:none}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.grid2 label,.field{display:grid;gap:4px;font-size:.82rem;color:var(--muted)}
+.grid2 input,.grid2 select{font:500 1rem var(--mono);padding:9px 10px}
+.checks{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.checks label{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-size:.85rem;cursor:pointer}
+.checks input{width:auto;padding:0;margin:0}
+.preview{margin-top:12px;display:grid;gap:10px;justify-items:center}
+.preview img{width:100%;max-width:300px;border-radius:12px;border:1px solid var(--line)}
+textarea{min-height:180px;font:500 .85rem/1.45 var(--mono);resize:vertical}
+
+/* registro */
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.stat{background:var(--bg);border-radius:12px;padding:12px;min-width:0}
+.stat p{margin:0}
+.stat .k{font:600 .7rem var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:800 1.05rem var(--display);color:var(--ok);overflow-wrap:anywhere}
+.stat .s{font-size:.75rem;color:var(--muted)}
+.list{display:grid;gap:8px;margin-top:12px}
+.item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:10px 12px;background:var(--bg);border-radius:10px}
+.item .t{font-weight:600;font-size:.9rem;min-width:0;overflow-wrap:anywhere}
+.item .m{font-size:.78rem;color:var(--muted);grid-column:1}
+.item .g{font:500 .9rem var(--mono);color:var(--ok);text-align:right}
+.item .del{grid-row:1/3;grid-column:3;width:34px;height:34px}
+.empty{font-size:.85rem;color:var(--muted);text-align:center;padding:14px;border:1px dashed var(--line);border-radius:10px;margin:12px 0 0}
+
+/* precios */
+.board__head,.board__row{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:8px;align-items:center;padding:10px 0}
+.board__head{font:600 .7rem var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line)}
+.board__row{border-bottom:1px solid var(--line)}
+.board__row:last-child{border-bottom:0}
+.cur{font-weight:600}
+.cur small{display:block;font-weight:400;color:var(--muted);font-size:.75rem}
+.px{font:500 .95rem var(--mono);text-align:right}
+.px small{display:block;font:400 .7rem var(--body);color:var(--muted)}
+.chg-up{color:var(--ok)} .chg-down{color:var(--bad)}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-top:12px}
+.seg button{flex:1;border:0;background:transparent;color:var(--muted);padding:9px 4px;font:600 .82rem var(--body);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--gold-soft);color:var(--ink)}
+.manual{display:grid;gap:10px;margin-top:10px}
+.manual__row{display:grid;grid-template-columns:52px minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center}
+.manual input{font:500 .95rem var(--mono);padding:9px 10px}
+.alrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:10px}
+.alrow select,.alrow input{font:500 .9rem var(--body);padding:9px 8px}
+footer{color:var(--muted);font-size:.78rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="top gutter">
+  <div class="top__in">
+    <div class="bar">
+      <div class="brand"><div class="brand__mark" aria-hidden="true">V</div><h1>Mesa Viruez</h1></div>
+      <div class="status"><span class="dot" id="dot"></span><span id="statusText">Cargando…</span></div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Secciones">
+      <button role="tab" id="tb-cotizar" data-tab="cotizar" aria-selected="true">Cotizar</button>
+      <button role="tab" id="tb-tasas" data-tab="tasas" aria-selected="false">Tasas</button>
+      <button role="tab" id="tb-publicar" data-tab="publicar" aria-selected="false">Publicar</button>
+      <button role="tab" id="tb-registro" data-tab="registro" aria-selected="false">Registro</button>
+      <button role="tab" id="tb-ajustes" data-tab="ajustes" aria-selected="false">Ajustes<span class="badge" id="alertBadge" hidden>0</span></button>
+    </nav>
+  </div>
+</div>
+
+<div class="gutter">
+<div class="wrap">
+  <div class="alerts" id="alertBanner" aria-live="polite"></div>
+
+  <!-- ===== COTIZAR ===== -->
+  <section data-panel="cotizar" class="card" aria-label="Cotizar envío">
+    <div class="route">
+      <select id="from" aria-label="El cliente entrega"></select>
+      <button class="swap" id="swap" type="button" aria-label="Invertir ruta">⇄</button>
+      <select id="to" aria-label="El cliente recibe"></select>
+    </div>
+    <div class="amounts">
+      <label class="amt"><span id="fromLbl">El cliente entrega</span>
+        <input id="amtFrom" type="text" inputmode="decimal" autocomplete="off" value="100.000"></label>
+      <div class="chips" id="chips"></div>
+      <label class="amt"><span id="toLbl">Le llega</span>
+        <input id="amtTo" type="text" inputmode="decimal" autocomplete="off" min="0"></label>
+    </div>
+    <div class="quote tabular">
+      <div class="row big"><span id="qTierLbl">Tasa</span><b id="qClient">—</b></div>
+      <div class="row"><span>Tu margen real ahora</span><span id="qPill" class="pill none">—</span></div>
+      <div class="row"><span>Tu ganancia estimada</span><b id="qProfit">—</b></div>
+      <div class="row"><span>Tu costo en Binance</span><b id="qCost">—</b></div>
+      <p class="note" id="qNote"></p>
+    </div>
+    <div class="actions">
+      <button class="btn btn--gold" id="copyBtn" type="button">Copiar cotización</button>
+      <button class="btn btn--ghost" id="logBtn" type="button">Registrar operación</button>
+    </div>
+    <p class="toast" id="toast" role="status"></p>
+  </section>
+
+  <section data-panel="cotizar" class="card" aria-label="Precios del USDT">
+    <h2>Precio del USDT ahora</h2>
+    <p class="note">Comprás USDT con la moneda que entrega el cliente y lo vendés en la que recibe.</p>
+    <div class="seg" role="group" aria-label="Qué precio usar">
+      <button type="button" data-mode="top5" aria-pressed="true">Promedio top 5</button>
+      <button type="button" data-mode="best" aria-pressed="false">Mejor anuncio</button>
+      <button type="button" data-mode="median" aria-pressed="false">Mediana top 20</button>
+    </div>
+    <div class="tabular" id="board">
+      <div class="board__head"><span>Moneda</span><span style="text-align:right">Comprás a</span><span style="text-align:right">Vendés a</span></div>
+    </div>
+    <button class="btn btn--ghost" id="refreshBtn" type="button" style="width:100%;margin-top:12px">Actualizar ahora</button>
+  </section>
+
+  <!-- ===== TASAS ===== -->
+  <section data-panel="tasas" class="card" aria-label="Tasas de hoy" hidden>
+    <h2>Tasas de hoy</h2>
+    <p class="note" id="todayNote"></p>
+    <div class="today tabular" id="today"></div>
+    <div class="actions">
+      <button class="btn btn--gold" id="fixAll" type="button">Fijar todas las tasas nuevas</button>
+    </div>
+    <p class="toast" id="toast3" role="status"></p>
+  </section>
+
+  <section data-panel="tasas" class="card" hidden>
+    <h2>Tramos y márgenes</h2>
+    <p class="note">Cada tramo vale desde ese monto (en la moneda que entrega el cliente) hasta el siguiente. La tasa se redondea para abajo, a tu favor, y nunca baja al subir de tramo.</p>
+    <div class="editor" id="editor"></div>
+    <button class="btn btn--ghost" id="resetCfg" type="button" style="width:100%;margin-top:14px">Restaurar tramos iniciales</button>
+  </section>
+
+  <!-- ===== PUBLICAR ===== -->
+  <section data-panel="publicar" class="card" aria-label="Imagen para estados" hidden>
+    <h2>Imagen para estados</h2>
+    <p class="note">Usa las tasas publicadas. Si cambiaron, fijalas primero en Tasas.</p>
+    <div class="grid2">
+      <label>Fecha<input id="pubDate" type="date"></label>
+      <label>Ruta<select id="imgRoute"></select></label>
+    </div>
+    <label class="field" style="margin-top:10px">Tu foto (opcional, mejor con fondo transparente)
+      <input id="photo" type="file" accept="image/*"></label>
+    <div class="actions">
+      <button class="btn btn--gold" id="makeImg" type="button">Crear imagen</button>
+    </div>
+    <div class="preview" id="preview" hidden>
+      <img id="previewImg" alt="Imagen de tasas generada">
+      <p class="note" style="text-align:center">Mantené apretada la imagen para guardarla, o usá Compartir.</p>
+      <div class="actions" style="width:100%;margin-top:0">
+        <button class="btn btn--gold" id="shareImg" type="button">Compartir</button>
+        <a class="btn btn--ghost" id="dlImg" download="tasas-viruez.png">Descargar</a>
+      </div>
+    </div>
+    <p class="toast" id="toast2" role="status"></p>
+  </section>
+
+  <section data-panel="publicar" class="card" aria-label="Texto para WhatsApp" hidden>
+    <h2>Texto para WhatsApp</h2>
+    <div class="checks" id="txtRoutes"></div>
+    <div class="seg" role="group" aria-label="Estilo del texto">
+      <button type="button" data-style="normal" aria-pressed="true">Normal</button>
+      <button type="button" data-style="emoji" aria-pressed="false">Números en emoji</button>
+    </div>
+    <div class="actions">
+      <button class="btn btn--gold" id="makeTxt" type="button">Copiar texto de tasas</button>
+    </div>
+    <textarea id="txtOut" aria-label="Texto generado" readonly hidden></textarea>
+    <p class="toast" id="toast4" role="status"></p>
+  </section>
+
+  <!-- ===== REGISTRO ===== -->
+  <section data-panel="registro" class="card" aria-label="Ganancias" hidden>
+    <h2>Tus ganancias</h2>
+    <p class="note">Calculadas con el costo de Binance al momento de registrar cada operación.</p>
+    <div class="stats tabular" id="stats"></div>
+  </section>
+
+  <section data-panel="registro" class="card" aria-label="Operaciones" hidden>
+    <h2>Operaciones</h2>
+    <p class="note">Se agregan desde Cotizar con "Registrar operación".</p>
+    <div class="list tabular" id="opsList"></div>
+  </section>
+
+  <section data-panel="registro" class="card" aria-label="Historial de tasas" hidden>
+    <h2>Historial de tasas publicadas</h2>
+    <div class="list tabular" id="histList"></div>
+  </section>
+
+  <!-- ===== AJUSTES ===== -->
+  <section data-panel="ajustes" class="card" aria-label="Alertas" hidden>
+    <h2>Alertas de precio</h2>
+    <p class="note">Te avisa cuando el USDT cruza un precio. Funciona mientras tengas la página abierta.</p>
+    <div class="alrow">
+      <select id="alCur" aria-label="Moneda"></select>
+      <select id="alCond" aria-label="Condición"><option value="sube">sube de</option><option value="baja">baja de</option></select>
+      <input id="alPrice" type="text" inputmode="decimal" autocomplete="off" placeholder="Precio" aria-label="Precio límite">
+    </div>
+    <div class="grid2" style="margin-top:8px">
+      <label>Lado<select id="alSide"><option value="buy">Comprás a</option><option value="sell">Vendés a</option></select></label>
+      <div style="display:flex;align-items:flex-end"><button class="btn btn--gold" id="addAlert" type="button" style="width:100%">Agregar alerta</button></div>
+    </div>
+    <div class="list" id="alertList"></div>
+  </section>
+
+  <section data-panel="ajustes" class="card" hidden>
+    <h2>Ajustes</h2>
+    <div class="grid2">
+      <label>Colchón sobre el costo %<input id="buffer" type="text" inputmode="decimal" autocomplete="off" step="0.1"></label>
+      <label>Margen mínimo (rojo debajo) %<input id="minMargin" type="text" inputmode="decimal" autocomplete="off" step="0.5"></label>
+      <label>WhatsApp Chile<input id="phCL" type="tel" placeholder="+56 9 …"></label>
+      <label>WhatsApp Argentina<input id="phAR" type="tel" placeholder="+54 9 …"></label>
+    </div>
+    <p class="note" style="margin-top:8px">El colchón te cubre si el precio se mueve entre que publicás y operás: las tasas nuevas y tu margen se calculan como si Binance estuviera ese % peor.</p>
+  </section>
+
+  <section data-panel="ajustes" class="card" hidden>
+    <h2>Copia de seguridad</h2>
+    <p class="note">Todo se guarda solo en este teléfono. Bajá una copia seguido y guardala en tu mail o en Drive: si cambiás o perdés el celular, la cargás y recuperás todo.</p>
+    <div class="actions">
+      <button class="btn btn--gold" id="exportBtn" type="button">Guardar copia</button>
+      <label class="btn btn--ghost" for="importFile" style="cursor:pointer">Cargar copia</label>
+      <input id="importFile" type="file" accept="application/json,.json" hidden>
+    </div>
+    <p class="toast" id="toast5" role="status"></p>
+  </section>
+
+  <section data-panel="ajustes" class="card" hidden>
+    <details id="manualBox">
+      <summary>Precios del USDT a mano (si Binance no responde)</summary>
+      <p class="note" style="margin-top:8px">Si los completás, se usan en lugar de los de Binance.</p>
+      <div class="manual" id="manual"></div>
+      <button class="btn btn--ghost" id="clearManual" type="button" style="width:100%;margin-top:10px">Volver a precios de Binance</button>
+    </details>
+  </section>
+
+  <footer>Herramienta privada. No compartas este link: muestra tu costo y tu margen.</footer>
+</div>
+</div>
+
+<canvas id="cv" width="1080" height="1920" hidden></canvas>
+
+<script>
+const AD_LIST = 'https://www.binance.com/bapi/c2c/v1/public/c2c/agent/ad-list';
+const QUOTE   = 'https://p2p.binance.com/bapi/c2c/v1/public/c2c/agent/quote-price';
+const CUR = {
+  CLP:{flag:'🇨🇱', dec:0, country:'Chile',     phone:'CL', chips:[50000,100000,200000,500000,1000000]},
+  BOB:{flag:'🇧🇴', dec:2, country:'Bolivia',   phone:'CL', chips:[500,1000,2000,5000,10000], sym:'Bs'},
+  ARS:{flag:'🇦🇷', dec:0, country:'Argentina', phone:'AR', chips:[50000,100000,500000,1000000,5000000]},
+};
+const CODES = Object.keys(CUR);
+const ROUTES = CODES.flatMap(a=>CODES.filter(b=>b!==a).map(b=>a+'-'+b));
+const REFRESH_MS = 30000;
+
+/* Cómo se escribe la tasa de cada ruta (igual que en tus historias):
+   unit = unidades de la moneda que entrega usadas como base; step = redondeo; sep = separador decimal */
+const RF = {
+  'CLP-BOB':{unit:1000,  step:0.1,  dec:2, sep:'.', hint:'Bs por cada 1.000 CLP'},
+  'ARS-BOB':{unit:10000, step:0.1,  dec:2, sep:'.', hint:'Bs por cada 10.000 ARS'},
+  'CLP-ARS':{unit:1,     step:0.01, dec:2, sep:',', hint:'ARS por cada 1 CLP'},
+  'BOB-CLP':{unit:1,     step:0.1,  dec:2, sep:',', hint:'CLP por cada 1 Bs'},
+  'BOB-ARS':{unit:1,     step:0.1,  dec:2, sep:',', hint:'ARS por cada 1 Bs'},
+  'ARS-CLP':{unit:1000,  step:1,    dec:0, sep:',', hint:'CLP por cada 1.000 ARS'},
+};
+/* Tramos iniciales. CLP→ARS con los márgenes que fijaste el 14/10.
+   Los que tienen "seed" calculan su margen solos con la tasa publicada el 14/10. */
+const DEFAULT_CFG = {
+  'CLP-BOB':[{min:0,margin:null,seed:11.50},{min:100000,margin:null,seed:11.70},{min:1000000,margin:null,seed:11.80}],
+  'ARS-BOB':[{min:0,margin:null,seed:71.10},{min:1000000,margin:null,seed:71.10}],
+  'CLP-ARS':[{min:0,margin:13},{min:50000,margin:11},{min:1000000,margin:9}],
+  'BOB-CLP':[{min:0,margin:5}], 'BOB-ARS':[{min:0,margin:5}], 'ARS-CLP':[{min:0,margin:5}],
+};
+const DEFAULT_PUB = {
+  'CLP-BOB':{date:'2026-10-14',tiers:[{min:0,rate:11.50},{min:100000,rate:11.70},{min:1000000,rate:11.80}]},
+  'ARS-BOB':{date:'2026-10-14',tiers:[{min:0,rate:71.10},{min:1000000,rate:71.10}]},
+  'CLP-ARS':{date:'2026-10-14',tiers:[{min:0,rate:1.41},{min:50000,rate:1.45},{min:1000000,rate:1.48}]},
+};
+const clone = o => JSON.parse(JSON.stringify(o));
+const KEYS = ['cfg','pub','ops','hist','alerts','phones','minMargin','buffer','mode','txtStyle'];
+
+const store = {
+  get(k,d){try{const v=localStorage.getItem('mesaviruez_'+k);return v==null?d:JSON.parse(v)}catch{return d}},
+  set(k,v){try{localStorage.setItem('mesaviruez_'+k,JSON.stringify(v))}catch{}}
+};
+let mode      = store.get('mode','top5');
+let cfg       = store.get('cfg', clone(DEFAULT_CFG));
+let pub       = store.get('pub', clone(DEFAULT_PUB));
+let ops       = store.get('ops', []);
+let hist      = store.get('hist', []);
+let alerts    = store.get('alerts', []);
+let phones    = store.get('phones', {CL:'',AR:''});
+let minMargin = store.get('minMargin', 2);
+let buffer    = store.get('buffer', 0.5);
+let txtStyle  = store.get('txtStyle','normal');
+let manual = {}, photo = null, live = {}, prev = {}, lastOk = null, lastEdited = 'from', fired = [];
+
+const $ = id => document.getElementById(id);
+const fmt = (n,dec=2) => (n==null||!isFinite(n)) ? '—' :
+  n.toLocaleString('es-AR',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+const intFmt = n => Math.floor(n+1e-6).toLocaleString('es-AR');
+const split = k => k.split('-');
+/* Lee números como los escribís: 100.000 · 1.000.000 · 11,80 · 11.80 · 1.234,56 · 1,5 */
+function num(v){
+  if(v==null) return NaN; let t=String(v).trim().replace(/\s|\$/g,'');
+  if(!t) return NaN;
+  const hasC=t.includes(','), hasD=t.includes('.');
+  if(hasC&&hasD){ t = t.lastIndexOf(',')>t.lastIndexOf('.') ? t.replace(/\./g,'').replace(',','.') : t.replace(/,/g,''); }
+  else if(hasC){ const parts=t.split(','); t = parts.length>2 ? parts.join('') : t.replace(',','.'); }
+  else if(hasD){ const parts=t.split('.'); if(parts.length>2 || (parts.length===2 && parts[1].length===3 && parts[0]!=='0')) t=parts.join(''); }
+  return parseFloat(t);
+}
+const numOr = (v,d) => { const n=num(v); return isNaN(n)?d:n; };
+/* Muestra montos con puntos de miles y coma decimal */
+const showAmt = (n,dec) => !n||!isFinite(n) ? '' : n.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:dec});
+const symb = c => CUR[c].sym || c;
+const rateStr = (k,r) => r==null||!isFinite(r) ? '—' : r.toFixed(RF[k].dec).replace('.', RF[k].sep);
+const big = n => n>=1e6 ? (n/1e6===1?'1 millón':fmt(n/1e6, n%1e6?1:0)+' millones') : n>=1000 ? fmt(n/1000, n%1000?1:0)+' mil' : fmt(n,0);
+const short = n => n>=1e6 ? fmt(n/1e6, n%1e6?1:0)+'M' : n>=1000 ? fmt(n/1000,0)+'k' : fmt(n,0);
+const todayISO = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const dateLabel = iso => { const [,m,d]=iso.split('-'); return `${d}/${m}`; };
+function flash(id,msg){ const t=$(id); if(!t) return; t.textContent=msg; clearTimeout(t._t); t._t=setTimeout(()=>t.textContent='',3500); }
+
+/* ---------- Binance ---------- */
+async function adList(fiat, tradeType){
+  const p = new URLSearchParams({asset:'USDT',fiat,tradeType,limit:'20'});
+  const r = await fetch(`${AD_LIST}?${p}`,{headers:{Accept:'application/json'}});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const j = await r.json();
+  return (j?.data?.items||[]).filter(i=>(parseFloat(i.tradableAmount)||0)>0).map(i=>parseFloat(i.price)).filter(isFinite);
+}
+async function quotePrice(fiat, tradeType){
+  const p = new URLSearchParams({asset:'USDT',fiat,tradeType});
+  const r = await fetch(`${QUOTE}?${p}`,{headers:{Accept:'application/json'}});
+  if(!r.ok) return null;
+  const v = parseFloat((await r.json())?.data?.price);
+  return isFinite(v) ? v : null;
+}
+// 'buy': vos comprás USDT (mejor = más barato). 'sell': vos vendés (mejor = más caro).
+function summarize(prices, side){
+  if(!prices.length) return null;
+  const s=[...prices].sort((a,b)=>side==='buy'?a-b:b-a), top=s.slice(0,5), asc=[...prices].sort((a,b)=>a-b), n=asc.length;
+  return {best:s[0], top5:top.reduce((a,b)=>a+b,0)/top.length, median:n%2?asc[(n-1)/2]:(asc[n/2-1]+asc[n/2])/2, count:n};
+}
+async function fetchCurrency(code){
+  let buy=null, sell=null;
+  try{ const [b,s]=await Promise.all([adList(code,'BUY'),adList(code,'SELL')]); buy=summarize(b,'buy'); sell=summarize(s,'sell'); }catch{}
+  if(!buy||!sell){
+    const [qb,qs]=await Promise.all([quotePrice(code,'BUY').catch(()=>null),quotePrice(code,'SELL').catch(()=>null)]);
+    if(!buy&&qb!=null) buy={best:qb,top5:qb,median:qb,count:1};
+    if(!sell&&qs!=null) sell={best:qs,top5:qs,median:qs,count:1};
+  }
+  if(!buy&&!sell) throw new Error('sin datos');
+  return {buy:buy||sell, sell:sell||buy};
+}
+async function refresh(){
+  setStatus('loading');
+  const res = await Promise.allSettled(CODES.map(fetchCurrency));
+  let ok=0;
+  res.forEach((r,i)=>{ if(r.status==='fulfilled'){ if(live[CODES[i]]) prev[CODES[i]]=live[CODES[i]]; live[CODES[i]]=r.value; ok++; }});
+  if(ok) lastOk=Date.now();
+  setStatus(ok?'live':'error');
+  if(!ok && !hasManual()) $('manualBox').open = true;
+  seedMargins(); checkAlerts(); renderAll();
+}
+
+/* ---------- cuentas ---------- */
+function hasManual(){ return CODES.some(c=>manual[c]?.buy||manual[c]?.sell); }
+function priceOf(code, side){ const m=manual[code]?.[side]; return m ? +m : (live[code]?.[side]?.[mode] ?? null); }
+// Cuánto de B conseguís por 1 de A (comprás USDT con A, lo vendés por B), menos el colchón.
+function cost(k){ const [a,b]=split(k), pa=priceOf(a,'buy'), pb=priceOf(b,'sell'); return (pa&&pb)?(pb/pa)*(1-buffer/100):null; }
+const toFactor = (k,rate) => rate / RF[k].unit;
+const roundDown = (x,step) => Math.floor(x/step + 1e-6) * step;
+const marginOfRate = (k,rate) => { const c=cost(k); return c ? (1 - toFactor(k,rate)/c)*100 : null; };
+const sortTiers = list => (list||[]).filter(t=>isFinite(t.min)).slice().sort((x,y)=>x.min-y.min);
+
+// Primera vez con precios: convierte las tasas del 14/10 en margen
+function seedMargins(){
+  let changed=false;
+  ROUTES.forEach(k=>{ const c=cost(k); if(!c) return;
+    (cfg[k]||[]).forEach(t=>{ if(t.margin==null && t.seed){ t.margin=Math.floor((1-toFactor(k,t.seed)/c)*10000)/100; changed=true; }});
+  });
+  if(changed){ store.set('cfg',cfg); renderEditor(); }
+}
+function suggested(k){
+  const c=cost(k); if(!c) return null;
+  let last=0;
+  return sortTiers(cfg[k]).map(t=>{
+    let r = t.margin==null ? null : roundDown(c*(1-t.margin/100)*RF[k].unit, RF[k].step);
+    if(r!=null){ r=Math.max(r,last); last=r; r=+r.toFixed(6); }
+    return {min:t.min, rate:r, margin:t.margin};
+  });
+}
+function active(k){
+  if(pub[k]?.tiers?.length) return {tiers:sortTiers(pub[k].tiers), src:'pub', date:pub[k].date};
+  const s=suggested(k); return s && s.length && s.every(t=>t.rate!=null) ? {tiers:s, src:'live'} : null;
+}
+function pick(tiers, amtA){ let p=tiers[0]; tiers.forEach(t=>{ if(amtA>=t.min) p=t; }); return p; }
+function solveFromB(k, tiers, amtB){
+  for(let i=tiers.length-1;i>=0;i--){ const A=amtB/toFactor(k,tiers[i].rate); if(A>=tiers[i].min) return A; }
+  return amtB/toFactor(k,tiers[0].rate);
+}
+function level(m){ if(m==null) return 'none'; if(m<minMargin) return 'bad'; if(m<minMargin+2) return 'warn'; return 'ok'; }
+const pillHTML = m => `<span class="pill ${level(m)}">${m==null?'sin precio':fmt(m,1)+'%'}</span>`;
+function tierLabel(tiers, t){
+  const i=tiers.indexOf(t), next=tiers[i+1];
+  if(!next) return t.min ? `${big(t.min)} arriba` : 'Cualquier monto';
+  return t.min ? `${big(t.min)} a ${big(next.min)}` : `Menores a ${big(next.min)}`;
+}
+// Cotización actual completa
+function currentQuote(){
+  const a=$('from').value, b=$('to').value, k=a+'-'+b, act=active(k);
+  if(!act) return null;
+  let amtA, amtB;
+  if(lastEdited==='from'){ amtA=numOr($('amtFrom').value,0); }
+  else { amtB=numOr($('amtTo').value,0); amtA=solveFromB(k,act.tiers,amtB); }
+  const t=pick(act.tiers, amtA), f=toFactor(k,t.rate);
+  if(lastEdited==='from') amtB=amtA*f;
+  const c=cost(k);
+  return {a,b,k,act,t,amtA,amtB,cost:c,profit:c?amtA-amtB/c:null,margin:marginOfRate(k,t.rate)};
+}
+
+/* ---------- render ---------- */
+function setStatus(s){
+  $('dot').className='dot'+(s==='live'?' live':s==='error'?' err':'');
+  if(s==='loading') $('statusText').textContent='Actualizando…';
+  else if(s==='error') $('statusText').textContent=hasManual()?'Precios a mano':'Sin Binance';
+  else tick();
+}
+function tick(){ if(!lastOk) return; const sec=Math.round((Date.now()-lastOk)/1000);
+  $('statusText').textContent=(hasManual()?'Mano + ':'')+(sec<5?'En vivo':`Hace ${sec}s`); }
+
+function renderChips(){
+  const a=$('from').value;
+  $('chips').innerHTML=CUR[a].chips.map(n=>`<button type="button" data-amt="${n}">${short(n)}</button>`).join('');
+  $('chips').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ $('amtFrom').value=showAmt(+b.dataset.amt,0); lastEdited='from'; calc(); }));
+}
+function calc(){
+  const a=$('from').value, b=$('to').value, k=a+'-'+b;
+  $('fromLbl').textContent=`El cliente entrega (${a})`;
+  $('toLbl').textContent=`Le llega (${symb(b)})`;
+  const q=currentQuote();
+  if(!q){ ['qClient','qProfit','qCost'].forEach(id=>$(id).textContent='—');
+    $('qPill').className='pill none'; $('qPill').textContent='—'; $('qNote').textContent='Esperando precios de Binance…'; return; }
+  if(lastEdited==='from') $('amtTo').value=showAmt(q.amtB,CUR[b].dec);
+  else $('amtFrom').value=showAmt(Math.ceil(q.amtA-1e-6),0);
+  $('qTierLbl').textContent=`Tasa · ${tierLabel(q.act.tiers,q.t)}`;
+  $('qClient').textContent=rateStr(k,q.t.rate);
+  $('qPill').className='pill '+level(q.margin); $('qPill').textContent=q.margin==null?'sin precio':fmt(q.margin,1)+'%';
+  $('qProfit').textContent=q.cost?`${fmt(q.profit,CUR[a].dec)} ${a}`:'—';
+  $('qCost').textContent=q.cost?rateStr(k,q.cost*RF[k].unit):'—';
+  $('qNote').textContent=`Tasa en ${RF[k].hint}. `+(q.act.src==='pub'?`Publicada el ${dateLabel(q.act.date)}.`:'Sin tasa publicada: usa la nueva calculada ahora.');
+}
+function renderToday(){
+  const box=$('today'); box.innerHTML='';
+  ROUTES.forEach(k=>{
+    const [a,b]=split(k), c=cost(k), sug=suggested(k)||[], ps=pub[k]?.tiers?sortTiers(pub[k].tiers):[];
+    const el=document.createElement('div'); el.className='rt__route';
+    el.innerHTML=`<div class="rt__head"><div><b>${CUR[a].flag} ${a} → ${CUR[b].flag} ${b}</b>
+      <small>${pub[k]?`Publicada ${dateLabel(pub[k].date)}`:'Sin publicar'} · costo ${c?rateStr(k,c*RF[k].unit):'—'}</small></div>
+      <button type="button" class="btn btn--ghost btn--small" data-fix="${k}">Fijar nuevas</button></div>`;
+    const tiers = sortTiers(cfg[k]);
+    tiers.forEach((t,i)=>{
+      const p = ps.length ? pick(ps, t.min) : null, s = sug[i];
+      const m = p ? marginOfRate(k,p.rate) : null;
+      const changed = p && s && s.rate!=null && Math.abs(s.rate-p.rate)>1e-9;
+      const row=document.createElement('div'); row.className='rt__tier';
+      row.innerHTML=`<span class="tr">${tierLabel(tiers,t)}</span><span class="pub">${p?rateStr(k,p.rate):'—'}</span>
+        <div class="sub"><span>${p?'Margen real '+pillHTML(m):'Sin tasa publicada'}</span>
+        <span>Nueva con ${t.margin==null?'—':fmt(t.margin,1)+'%'}: <b class="${changed?'new':''}">${s?rateStr(k,s.rate):'—'}</b></span></div>`;
+      el.appendChild(row);
+    });
+    box.appendChild(el);
+  });
+  box.querySelectorAll('[data-fix]').forEach(btn=>btn.addEventListener('click',()=>fix([btn.dataset.fix])));
+  $('todayNote').textContent=`La publicada es la que le das a tus clientes; la nueva sale de tu margen y el costo de ahora (con ${fmt(buffer,1)}% de colchón). Verde ${fmt(minMargin+2,1)}% o más · amarillo ${fmt(minMargin,1)} a ${fmt(minMargin+2,1)}% · rojo menos de ${fmt(minMargin,1)}%.`;
+}
+function fix(keys){
+  const date=$('pubDate').value||todayISO(); let n=0;
+  keys.forEach(k=>{ const s=suggested(k); if(s && s.length && s.every(t=>t.rate!=null)){
+    const tiers=s.map(t=>({min:t.min,rate:t.rate}));
+    pub[k]={date,tiers}; n++;
+    hist.unshift({ts:Date.now(),date,k,tiers,cost:cost(k)});
+  }});
+  hist=hist.slice(0,200);
+  store.set('pub',pub); store.set('hist',hist); renderAll(); renderTxtRoutes();
+  flash('toast3', n?`Fijadas ${n} ruta${n>1?'s':''}. Ya podés publicarlas.`:'Faltan precios de Binance para fijar.');
+}
+function renderEditor(){
+  const box=$('editor'); box.innerHTML='';
+  ROUTES.forEach(k=>{
+    const [a,b]=split(k), list=cfg[k]||(cfg[k]=[]);
+    const r=document.createElement('div'); r.className='ed__route';
+    let html=`<div class="ed__head"><b>${CUR[a].flag} ${a} → ${CUR[b].flag} ${b}</b><button type="button" class="btn btn--ghost btn--small" data-add="${k}">+ Tramo</button></div>
+      <p class="note">Tasa en ${RF[k].hint}</p>
+      <div class="ed__cols"><span>Desde (${a})</span><span>Margen %</span><span style="text-align:right">Tasa hoy</span><span></span></div>`;
+    list.forEach((t,i)=>{
+      html+=`<div class="ed__row"><input id="c_${k}_${i}_min" type="text" inputmode="decimal" autocomplete="off" value="${t.min.toLocaleString('es-AR')}" data-k="${k}" data-i="${i}" data-f="min" aria-label="Desde">
+        <input id="c_${k}_${i}_margin" type="text" inputmode="decimal" autocomplete="off" step="0.1" value="${t.margin==null?'':String(t.margin).replace('.',',')}" placeholder="…" data-k="${k}" data-i="${i}" data-f="margin" aria-label="Margen">
+        <output id="o_${k}_${i}">—</output>
+        <button type="button" class="del" aria-label="Borrar tramo" data-del="${k}" data-i="${i}">✕</button></div>`;
+    });
+    r.innerHTML=html; box.appendChild(r);
+  });
+  box.querySelectorAll('input[data-k]').forEach(inp=>inp.addEventListener('input',e=>{
+    const {k,i,f}=e.target.dataset, v=num(e.target.value);
+    cfg[k][+i][f]= isNaN(v) ? (f==='margin'?null:0) : v;
+    if(f==='margin') delete cfg[k][+i].seed;
+    store.set('cfg',cfg); renderOutputs(); renderToday(); calc();
+  }));
+  box.querySelectorAll('[data-add]').forEach(btn=>btn.addEventListener('click',()=>{
+    const k=btn.dataset.add, list=cfg[k], last=sortTiers(list).pop();
+    list.push({min:last?(last.min?last.min*10:50000):0, margin:last?.margin!=null?Math.max(0,+(last.margin-1).toFixed(2)):5});
+    store.set('cfg',cfg); renderEditor(); renderAll();
+  }));
+  box.querySelectorAll('[data-del]').forEach(btn=>btn.addEventListener('click',()=>{
+    cfg[btn.dataset.del].splice(+btn.dataset.i,1); store.set('cfg',cfg); renderEditor(); renderAll();
+  }));
+  renderOutputs();
+}
+function renderOutputs(){
+  ROUTES.forEach(k=>{ const s=suggested(k), sorted=sortTiers(cfg[k]);
+    (cfg[k]||[]).forEach((t,i)=>{ const o=$(`o_${k}_${i}`); if(!o) return;
+      const j=sorted.indexOf(t); o.textContent = s&&s[j] ? rateStr(k,s[j].rate) : '—'; });
+  });
+}
+function renderBoard(){
+  const b=$('board'); b.querySelectorAll('.board__row').forEach(n=>n.remove());
+  CODES.forEach(c=>{
+    const bu=priceOf(c,'buy'), se=priceOf(c,'sell'), pb=prev[c]?.buy?.[mode];
+    const arrow=(bu&&pb&&!manual[c]?.buy)?(bu>pb?'<span class="chg-up">▲</span> ':bu<pb?'<span class="chg-down">▼</span> ':''):'';
+    const n=live[c]?.buy?.count, dec=c==='BOB'?3:1;
+    const row=document.createElement('div'); row.className='board__row';
+    row.innerHTML=`<span class="cur">${CUR[c].flag} ${c}<small>${manual[c]?.buy||manual[c]?.sell?'a mano':(n?n+' anuncios':'sin datos')}</small></span>
+      <span class="px">${arrow}${fmt(bu,dec)}<small>por USDT</small></span><span class="px">${fmt(se,dec)}<small>por USDT</small></span>`;
+    b.appendChild(row);
+  });
+}
+function renderManual(){
+  const box=$('manual');
+  box.innerHTML=`<div class="manual__row" style="font-size:.75rem;color:var(--muted)"><span></span><span>Comprás a</span><span>Vendés a</span></div>`;
+  CODES.forEach(c=>{
+    const r=document.createElement('div'); r.className='manual__row';
+    r.innerHTML=`<span class="cur">${c}</span>
+      <input id="man_${c}_buy" type="text" inputmode="decimal" autocomplete="off" placeholder="—" value="${manual[c]?.buy??''}" aria-label="${c} comprás a">
+      <input id="man_${c}_sell" type="text" inputmode="decimal" autocomplete="off" placeholder="—" value="${manual[c]?.sell??''}" aria-label="${c} vendés a">`;
+    box.appendChild(r);
+    ['buy','sell'].forEach(s=>r.querySelector(`#man_${c}_${s}`).addEventListener('input',e=>{
+      manual[c]=manual[c]||{}; manual[c][s]=e.target.value?numOr(e.target.value,null):null;
+      seedMargins(); renderAll(); setStatus(lastOk?'live':'error');
+    }));
+  });
+}
+function renderTxtRoutes(){
+  const box=$('txtRoutes'), keep=new Set([...box.querySelectorAll('input:checked')].map(i=>i.value)), first=!box.children.length;
+  box.innerHTML='';
+  ROUTES.forEach(k=>{ const [a,b]=split(k), on = first ? !!pub[k] : keep.has(k);
+    const l=document.createElement('label');
+    l.innerHTML=`<input type="checkbox" id="tx_${k}" value="${k}" ${on?'checked':''}> ${CUR[a].flag}→${CUR[b].flag} ${a}-${b}`;
+    box.appendChild(l);
+  });
+}
+
+/* ---------- registro ---------- */
+function logOperation(){
+  const q=currentQuote();
+  if(!q||!q.amtA){ flash('toast','Poné un monto y esperá los precios para registrar.'); return; }
+  ops.unshift({ts:Date.now(),k:q.k,amtA:q.amtA,amtB:q.amtB,rate:q.t.rate,profit:q.profit,margin:q.margin});
+  store.set('ops',ops); renderRegistro();
+  flash('toast',`Registrada: ${fmt(q.amtA,CUR[q.a].dec)} ${q.a} → ${fmt(q.amtB,CUR[q.b].dec)} ${symb(q.b)}.`);
+}
+function renderRegistro(){
+  const now=new Date(), dayKey=d=>d.toDateString(), monKey=d=>d.getFullYear()+'-'+d.getMonth();
+  const sum={day:{},mon:{}}, count={day:0,mon:0};
+  ops.forEach(o=>{ const d=new Date(o.ts), a=split(o.k)[0], p=o.profit||0;
+    if(monKey(d)===monKey(now)){ sum.mon[a]=(sum.mon[a]||0)+p; count.mon++;
+      if(dayKey(d)===dayKey(now)){ sum.day[a]=(sum.day[a]||0)+p; count.day++; } }
+  });
+  const fmtSum = s => Object.keys(s).length ? Object.entries(s).map(([c,v])=>`${fmt(v,CUR[c].dec)} ${c}`).join('<br>') : '0';
+  const mes=now.toLocaleDateString('es-AR',{month:'long'});
+  $('stats').innerHTML=`<div class="stat"><p class="k">Hoy</p><p class="v">${fmtSum(sum.day)}</p><p class="s">${count.day} operaciones</p></div>
+    <div class="stat"><p class="k">${mes}</p><p class="v">${fmtSum(sum.mon)}</p><p class="s">${count.mon} operaciones</p></div>`;
+  $('opsList').innerHTML = ops.length ? ops.slice(0,60).map((o,i)=>{ const [a,b]=split(o.k), d=new Date(o.ts);
+    return `<div class="item"><span class="t">${CUR[a].flag} ${fmt(o.amtA,CUR[a].dec)} ${a} → ${CUR[b].flag} ${fmt(o.amtB,CUR[b].dec)} ${symb(b)}</span>
+      <span class="g">${o.profit!=null?'+'+fmt(o.profit,CUR[a].dec)+' '+a:'—'}</span>
+      <span class="m">${d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})} ${d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} · tasa ${rateStr(o.k,o.rate)}${o.margin!=null?' · '+fmt(o.margin,1)+'%':''}</span>
+      <button type="button" class="del" aria-label="Borrar operación" data-delop="${i}">✕</button></div>`; }).join('')
+    : '<p class="empty">Todavía no registraste operaciones. Cotizá y tocá "Registrar operación".</p>';
+  $('opsList').querySelectorAll('[data-delop]').forEach(b=>b.addEventListener('click',()=>{
+    if(b.dataset.armed){ ops.splice(+b.dataset.delop,1); store.set('ops',ops); renderRegistro(); }
+    else { b.dataset.armed='1'; b.textContent='¿?'; b.setAttribute('aria-label','Tocá de nuevo para borrar'); setTimeout(()=>{ if(b.isConnected){ delete b.dataset.armed; b.textContent='✕'; } },2500); }
+  }));
+  $('histList').innerHTML = hist.length ? hist.slice(0,40).map(h=>{ const [a,b]=split(h.k), d=new Date(h.ts);
+    const ts=sortTiers(h.tiers);
+    return `<div class="item"><span class="t">${CUR[a].flag}→${CUR[b].flag} ${ts.map(t=>rateStr(h.k,t.rate)).join(' · ')}</span>
+      <span class="g" style="color:var(--muted)">${h.cost?'costo '+rateStr(h.k,h.cost*RF[h.k].unit):''}</span>
+      <span class="m">${d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'})} ${d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span></div>`; }).join('')
+    : '<p class="empty">Cada vez que fijes tasas nuevas quedan guardadas acá.</p>';
+}
+
+/* ---------- alertas ---------- */
+function renderAlerts(){
+  $('alertList').innerHTML = alerts.length ? alerts.map((al,i)=>`<div class="item"><span class="t">${CUR[al.c].flag} ${al.c} · ${al.side==='buy'?'comprás':'vendés'} ${al.cond==='sube'?'sube de':'baja de'} ${fmt(al.price,al.c==='BOB'?3:1)}</span>
+      <span class="g" style="color:${al.done?'var(--warn)':'var(--muted)'}">${al.done?'avisó':'activa'}</span>
+      <span class="m">${al.done?'Tocá ✕ para borrarla':'Precio ahora: '+fmt(priceOf(al.c,al.side),al.c==='BOB'?3:1)}</span>
+      <button type="button" class="del" aria-label="Borrar alerta" data-delal="${i}">✕</button></div>`).join('')
+    : '<p class="empty">Sin alertas.</p>';
+  $('alertList').querySelectorAll('[data-delal]').forEach(b=>b.addEventListener('click',()=>{ alerts.splice(+b.dataset.delal,1); store.set('alerts',alerts); renderAlerts(); renderBanner(); }));
+}
+function checkAlerts(){
+  let any=false;
+  alerts.forEach(al=>{ if(al.done) return; const p=priceOf(al.c,al.side); if(!p) return;
+    if((al.cond==='sube'&&p>al.price)||(al.cond==='baja'&&p<al.price)){
+      al.done=true; any=true;
+      const msg=`${CUR[al.c].flag} ${al.c} ${al.side==='buy'?'compra':'venta'} ${al.cond==='sube'?'subió de':'bajó de'} ${fmt(al.price,al.c==='BOB'?3:1)}: ahora ${fmt(p,al.c==='BOB'?3:1)}`;
+      fired.push(msg);
+      try{ if('Notification' in window && Notification.permission==='granted') new Notification('Mesa Viruez',{body:msg}); }catch{}
+    }
+  });
+  if(any){ store.set('alerts',alerts); try{ navigator.vibrate?.([200,100,200]); }catch{} renderBanner(); renderAlerts(); }
+}
+function renderBanner(){
+  $('alertBanner').innerHTML=fired.map((m,i)=>`<div class="alert"><span>🔔 ${m}</span><button type="button" class="del" aria-label="Cerrar aviso" data-close="${i}" style="width:32px;height:32px">✕</button></div>`).join('');
+  $('alertBanner').querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>{ fired.splice(+b.dataset.close,1); renderBanner(); }));
+  const n=fired.length; $('alertBadge').hidden=!n; $('alertBadge').textContent=n;
+}
+
+/* ---------- textos ---------- */
+function longDate(iso){
+  const [y,m,d]=iso.split('-').map(Number), dt=new Date(y,m-1,d);
+  const w=dt.toLocaleDateString('es-AR',{weekday:'long'});
+  return `${w[0].toUpperCase()+w.slice(1)} ${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
+}
+const EMO=['0️⃣','1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+const emojiNum = s => [...s].map(ch=>/\d/.test(ch)?EMO[+ch]:(ch==='.'||ch===',')?'▪️':ch).join('');
+function example(k,t){ const [a,b]=split(k); return `${intFmt(t.min)} ${a} = ${intFmt(t.min*toFactor(k,t.rate))} ${symb(b)}`; }
+function ratesText(keys){
+  const date=$('pubDate').value||todayISO();
+  let s=`🦁 *VIRUEZ ENVÍOS*\n_Su dinero, nuestro compromiso._\n📅 ${longDate(date)}\n`;
+  const used=new Set();
+  keys.forEach(k=>{ const act=active(k); if(!act) return; const [a,b]=split(k);
+    used.add(CUR[a].phone);
+    s+=`\n${CUR[a].flag}➡️${CUR[b].flag} *${CUR[a].country} → ${CUR[b].country}*\n`;
+    [...act.tiers].reverse().forEach(t=>{
+      const r=rateStr(k,t.rate);
+      if(txtStyle==='emoji'){ s+=`${tierLabel(act.tiers,t)}:\n      ${emojiNum(r)}\n`; if(t.min) s+=`${CUR[a].flag} ${example(k,t)} ${CUR[b].flag}\n`; s+='\n'; }
+      else { s+=`💰 ${tierLabel(act.tiers,t)}: *${r}*\n`; if(t.min) s+=`     ${example(k,t)}\n`; }
+    });
+  });
+  s+=`\n✅ Rápido y seguro\n`;
+  if(used.has('CL')&&phones.CL) s+=`📲 Chile: ${phones.CL}\n`;
+  if(used.has('AR')&&phones.AR) s+=`📲 Argentina: ${phones.AR}\n`;
+  return s.replace(/\n{3,}/g,'\n\n').trim();
+}
+function quoteText(){
+  const q=currentQuote(); if(!q||!q.amtA) return null;
+  const hora=new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  return `🦁 *Viruez Envíos* — Cotización\n\n${CUR[q.a].flag} Envías: *${fmt(q.amtA,CUR[q.a].dec)} ${q.a}*\n${CUR[q.b].flag} Recibe: *${fmt(q.amtB,CUR[q.b].dec)} ${symb(q.b)}*\n💱 Tasa: *${rateStr(q.k,q.t.rate)}* (${RF[q.k].hint})\n\n🕐 Cotización de las ${hora}, válida por 15 minutos.\n⚠️ Esto es una cotización, no un comprobante de pago.`;
+}
+async function copy(text, toastId){
+  try{ await navigator.clipboard.writeText(text); flash(toastId,'Copiado. Pegalo en WhatsApp.'); return true; }
+  catch{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select();
+    let ok=false; try{ ok=document.execCommand('copy'); }catch{} ta.remove();
+    flash(toastId, ok?'Copiado. Pegalo en WhatsApp.':'No se pudo copiar: seleccioná el texto y copialo a mano.'); return ok; }
+}
+
+/* ---------- imagen para estados ---------- */
+function rr(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function goldFill(ctx,y0,y1){ const g=ctx.createLinearGradient(0,y0,0,y1); g.addColorStop(0,'#fff1c4'); g.addColorStop(.45,'#e9bf5c'); g.addColorStop(1,'#a8740f'); return g; }
+function fitText(ctx, text, maxW, size, font){ let s=size; ctx.font=font(s); while(ctx.measureText(text).width>maxW && s>12){ s-=2; ctx.font=font(s); } return s; }
+async function drawImage(k){
+  const act=active(k); if(!act) return null;
+  try{ await Promise.all(['700 100px Cinzel','600 italic 60px "Cormorant Garamond"','700 100px Oswald','500 50px Oswald'].map(f=>document.fonts.load(f))); }catch{}
+  const [a,b]=split(k), cv=$('cv'), ctx=cv.getContext('2d'), W=1080, H=1920;
+  const date=$('pubDate').value||todayISO();
+  let g=ctx.createRadialGradient(540,520,60,540,700,1300);
+  g.addColorStop(0,'#7a2343'); g.addColorStop(.55,'#3d0f22'); g.addColorStop(1,'#1a0510');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  g=ctx.createRadialGradient(540,300,10,540,300,380); g.addColorStop(0,'rgba(255,205,110,.35)'); g.addColorStop(1,'rgba(255,205,110,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,700);
+  ctx.strokeStyle='rgba(233,191,92,.55)'; ctx.lineWidth=4; ctx.beginPath(); ctx.ellipse(540,310,300,120,0,0,Math.PI*2); ctx.stroke();
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font='170px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  ctx.fillText(CUR[a].flag,330,300); ctx.fillText(CUR[b].flag,750,300);
+  ctx.fillStyle=goldFill(ctx,250,350); ctx.font='700 120px Oswald, sans-serif'; ctx.fillText('→',540,295);
+  ctx.fillStyle=goldFill(ctx,500,600); ctx.font='700 108px Cinzel, Georgia, serif'; ctx.fillText('VIRUEZ ENVÍOS',540,545);
+  ctx.fillStyle='#e9c77a'; ctx.font='600 italic 50px "Cormorant Garamond", Georgia, serif'; ctx.fillText('Su dinero, nuestro compromiso.',540,625);
+  ctx.strokeStyle='rgba(233,191,92,.6)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(260,670); ctx.lineTo(820,670); ctx.stroke();
+  ctx.fillStyle='#f6e7c8'; ctx.font='500 54px Oswald, sans-serif'; ctx.fillText(`${CUR[a].country.toUpperCase()}  →  ${CUR[b].country.toUpperCase()}`,540,730);
+  ctx.fillStyle='#e9c77a'; ctx.font='600 italic 62px "Cormorant Garamond", Georgia, serif'; ctx.fillText(longDate(date),540,810);
+  const hasPhoto=!!photo, boxX=hasPhoto?48:90, boxW=hasPhoto?640:900;
+  if(hasPhoto){
+    const pw=520, ph=pw*photo.height/photo.width, px=W-pw+60, py=Math.max(860, 1580-ph);
+    ctx.save(); ctx.beginPath(); ctx.rect(0,860,W,720); ctx.clip(); ctx.drawImage(photo,px,py,pw,ph); ctx.restore();
+  }
+  const tiers=[...act.tiers].reverse(), bigs=tiers.filter(t=>t.min>0||tiers.length===1), small=tiers.filter(t=>!(t.min>0||tiers.length===1));
+  const area=1580-870, gap=26, smallH=small.length?105:0;
+  const bigH=Math.min(270,(area-smallH*small.length-gap*(bigs.length+small.length-1))/Math.max(1,bigs.length));
+  let y=870; const cx=boxX+boxW/2;
+  bigs.forEach(t=>{
+    ctx.fillStyle='rgba(40,8,20,.82)'; rr(ctx,boxX,y,boxW,bigH,26); ctx.fill();
+    ctx.strokeStyle='#d9a947'; ctx.lineWidth=4; ctx.stroke();
+    const label = tiers.length===1 ? 'Tasa del día:' : `Montos de ${tierLabel(act.tiers,t)}:`;
+    ctx.fillStyle='#f6e7c8'; fitText(ctx,label,boxW-60,50,s=>`500 ${s}px Oswald, sans-serif`); ctx.fillText(label,cx,y+bigH*0.18);
+    ctx.fillStyle=goldFill(ctx,y+bigH*0.3,y+bigH*0.72); ctx.font=`700 ${Math.round(bigH*0.52)}px Oswald, sans-serif`;
+    ctx.fillText(`*${rateStr(k,t.rate)}*`,cx,y+bigH*0.52);
+    if(t.min){ const ex=`${CUR[a].flag} ${example(k,t)} ${CUR[b].flag}`;
+      ctx.fillStyle='#f6e7c8'; fitText(ctx,ex,boxW-50,42,s=>`500 ${s}px Oswald, "Apple Color Emoji", sans-serif`); ctx.fillText(ex,cx,y+bigH*0.85); }
+    y+=bigH+gap;
+  });
+  small.forEach(t=>{
+    ctx.fillStyle='rgba(40,8,20,.82)'; rr(ctx,boxX,y,boxW,smallH,22); ctx.fill();
+    ctx.strokeStyle='#d9a947'; ctx.lineWidth=3; ctx.stroke();
+    const tx=`${tierLabel(act.tiers,t)}: ${rateStr(k,t.rate)}`;
+    ctx.fillStyle='#f6e7c8'; fitText(ctx,tx,boxW-50,54,s=>`500 ${s}px Oswald, sans-serif`); ctx.fillText(tx,cx,y+smallH/2);
+    y+=smallH+gap;
+  });
+  g=ctx.createLinearGradient(0,1600,0,H); g.addColorStop(0,'rgba(26,5,16,0)'); g.addColorStop(.25,'rgba(26,5,16,.85)'); g.addColorStop(1,'#1a0510');
+  ctx.fillStyle=g; ctx.fillRect(0,1600,W,H-1600);
+  ctx.fillStyle=goldFill(ctx,1640,1720); ctx.font='700 86px Oswald, sans-serif'; ctx.fillText('Rápido y Seguro',540,1690);
+  const ph=phones[CUR[a].phone]||phones.CL||phones.AR;
+  if(ph){ ctx.fillStyle='#f6e7c8'; ctx.font='500 60px Oswald, sans-serif'; ctx.fillText(`WhatsApp ${ph}`,540,1785); }
+  ctx.fillStyle='#e9c77a'; ctx.font='600 italic 40px "Cormorant Garamond", Georgia, serif'; ctx.fillText('Su dinero, nuestro compromiso.',540,1865);
+  return new Promise(res=>cv.toBlob(res,'image/png'));
+}
+let lastBlob=null, lastUrl=null;
+async function makeImage(){
+  const k=$('imgRoute').value;
+  if(!active(k)){ flash('toast2','Esa ruta todavía no tiene tasas. Esperá los precios o fijalas en Tasas.'); return; }
+  const blob=await drawImage(k); if(!blob) return;
+  lastBlob=blob; if(lastUrl) URL.revokeObjectURL(lastUrl); lastUrl=URL.createObjectURL(blob);
+  $('previewImg').src=lastUrl; $('dlImg').href=lastUrl; $('dlImg').download=`viruez-${k.toLowerCase()}-${$('pubDate').value||todayISO()}.png`;
+  $('preview').hidden=false;
+}
+async function shareImage(){
+  if(!lastBlob) return;
+  const file=new File([lastBlob], $('dlImg').download, {type:'image/png'});
+  try{ if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file]}); return; } }
+  catch(e){ if(e?.name==='AbortError') return; }
+  flash('toast2','Tu navegador no deja compartir directo: mantené apretada la imagen y guardala.');
+}
+
+/* ---------- copia de seguridad ---------- */
+function exportData(){
+  const data={app:'mesa-viruez',v:1,saved:new Date().toISOString()};
+  KEYS.forEach(k=>data[k]=store.get(k,null));
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+  const file=new File([blob],`mesa-viruez-${todayISO()}.json`,{type:'application/json'});
+  (async()=>{
+    try{ if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file]}); flash('toast5','Copia lista.'); return; } }
+    catch(e){ if(e?.name==='AbortError') return; }
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=file.name; document.body.appendChild(a); a.click(); a.remove();
+    flash('toast5','Copia descargada.');
+  })();
+}
+function importData(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(d.app!=='mesa-viruez') throw new Error();
+      KEYS.forEach(k=>{ if(d[k]!=null) store.set(k,d[k]); });
+      flash('toast5','Copia cargada. Recargando…'); setTimeout(()=>location.reload(),800);
+    }catch{ flash('toast5','Ese archivo no es una copia de Mesa Viruez.'); }
+  };
+  r.readAsText(file);
+}
+
+/* ---------- pestañas y eventos ---------- */
+function showTab(name){
+  document.querySelectorAll('.tabs [role=tab]').forEach(b=>b.setAttribute('aria-selected', b.dataset.tab===name));
+  document.querySelectorAll('[data-panel]').forEach(p=>p.hidden = p.dataset.panel!==name);
+  try{ sessionStorage.setItem('mesaviruez_tab',name); }catch{}
+  if(name==='registro') renderRegistro();
+  if(name==='ajustes') renderAlerts();
+  window.scrollTo(0,0);
+}
+function fillSelects(){
+  const o=CODES.map(c=>`<option value="${c}">${CUR[c].flag} ${c}</option>`).join('');
+  $('from').innerHTML=o; $('to').innerHTML=o; $('alCur').innerHTML=o;
+  $('from').value=store.get('from','CLP'); $('to').value=store.get('to','BOB');
+  if($('from').value===$('to').value) $('to').value=CODES.find(c=>c!==$('from').value);
+  $('imgRoute').innerHTML=ROUTES.map(k=>{const [a,b]=split(k);return `<option value="${k}">${CUR[a].flag} ${a} → ${CUR[b].flag} ${b}</option>`}).join('');
+}
+function renderAll(){ renderBoard(); renderToday(); renderOutputs(); calc(); }
+
+fillSelects(); renderChips(); renderEditor(); renderManual(); renderTxtRoutes(); renderAll(); renderRegistro(); renderAlerts();
+$('pubDate').value=todayISO();
+$('phCL').value=phones.CL||''; $('phAR').value=phones.AR||'';
+$('minMargin').value=minMargin; $('buffer').value=buffer;
+document.querySelectorAll('.tabs [role=tab]').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
+try{ const t=sessionStorage.getItem('mesaviruez_tab'); if(t) showTab(t); }catch{}
+
+['CL','AR'].forEach(c=>$('ph'+c).addEventListener('input',e=>{phones[c]=e.target.value.trim();store.set('phones',phones);}));
+$('minMargin').addEventListener('input',e=>{minMargin=numOr(e.target.value,0);store.set('minMargin',minMargin);renderToday();calc();});
+$('buffer').addEventListener('input',e=>{buffer=numOr(e.target.value,0);store.set('buffer',buffer);renderAll();});
+$('photo').addEventListener('change',e=>{
+  const f=e.target.files?.[0]; if(!f) return;
+  const img=new Image(); img.onload=()=>{photo=img; flash('toast2','Foto lista. Creá la imagen.');}; img.src=URL.createObjectURL(f);
+});
+document.querySelectorAll('[data-mode]').forEach(btn=>{
+  btn.setAttribute('aria-pressed',btn.dataset.mode===mode);
+  btn.addEventListener('click',()=>{ mode=btn.dataset.mode; store.set('mode',mode);
+    document.querySelectorAll('[data-mode]').forEach(x=>x.setAttribute('aria-pressed',x===btn)); renderAll(); });
+});
+document.querySelectorAll('[data-style]').forEach(btn=>{
+  btn.setAttribute('aria-pressed',btn.dataset.style===txtStyle);
+  btn.addEventListener('click',()=>{ txtStyle=btn.dataset.style; store.set('txtStyle',txtStyle);
+    document.querySelectorAll('[data-style]').forEach(x=>x.setAttribute('aria-pressed',x===btn)); });
+});
+['from','to'].forEach(id=>$(id).addEventListener('change',e=>{
+  const other=id==='from'?'to':'from';
+  if($('from').value===$('to').value) $(other).value=CODES.find(c=>c!==e.target.value);
+  store.set('from',$('from').value); store.set('to',$('to').value); lastEdited='from'; renderChips(); calc();
+}));
+$('swap').addEventListener('click',()=>{ const f=$('from').value; $('from').value=$('to').value; $('to').value=f;
+  store.set('from',$('from').value); store.set('to',$('to').value); lastEdited='from'; renderChips(); calc(); });
+$('amtFrom').addEventListener('input',()=>{lastEdited='from';calc();});
+$('amtTo').addEventListener('input',()=>{lastEdited='to';calc();});
+$('copyBtn').addEventListener('click',()=>{ const t=quoteText(); t?copy(t,'toast'):flash('toast','Poné un monto y esperá los precios para cotizar.'); });
+$('logBtn').addEventListener('click',logOperation);
+$('fixAll').addEventListener('click',()=>fix(ROUTES));
+$('makeImg').addEventListener('click',makeImage);
+$('shareImg').addEventListener('click',shareImage);
+$('makeTxt').addEventListener('click',()=>{
+  const keys=[...document.querySelectorAll('#txtRoutes input:checked')].map(i=>i.value);
+  if(!keys.length){ flash('toast4','Elegí al menos una ruta.'); return; }
+  const t=ratesText(keys); $('txtOut').value=t; $('txtOut').hidden=false; copy(t,'toast4');
+});
+$('addAlert').addEventListener('click',()=>{
+  const price=num($('alPrice').value);
+  if(!price){ $('alPrice').focus(); return; }
+  alerts.push({c:$('alCur').value,cond:$('alCond').value,side:$('alSide').value,price});
+  store.set('alerts',alerts); $('alPrice').value=''; renderAlerts();
+  try{ if('Notification' in window && Notification.permission==='default') Notification.requestPermission(); }catch{}
+});
+$('exportBtn').addEventListener('click',exportData);
+$('importFile').addEventListener('change',e=>{ const f=e.target.files?.[0]; if(f) importData(f); e.target.value=''; });
+$('refreshBtn').addEventListener('click',refresh);
+$('resetCfg').addEventListener('click',()=>{ cfg=clone(DEFAULT_CFG); store.set('cfg',cfg); seedMargins(); renderEditor(); renderAll(); });
+$('clearManual').addEventListener('click',()=>{ manual={}; renderManual(); renderAll(); setStatus(lastOk?'live':'error'); });
+
+refresh();
+setInterval(()=>{ if(!document.hidden) refresh(); }, REFRESH_MS);
+setInterval(tick, 1000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&(!lastOk||Date.now()-lastOk>REFRESH_MS)) refresh(); });
+</script>
+</body>
+</html>
